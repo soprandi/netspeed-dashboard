@@ -13,21 +13,27 @@
         box-sizing: border-box;
         font-family: Arial, sans-serif;
         background: #f7f7f7;
+        overflow: hidden; /* evita scroll */
+    }
+    *, *:before, *:after {
+        box-sizing: inherit;
     }
     #info-box {
         position: absolute;
         top: 0;
         right: 0;
+        margin: 0;
+        border-bottom-left-radius: 12px;
+        z-index: 100;
+        min-width: 210px;
+        background: rgba(255,255,255,0.85);
         padding: 16px 18px 0 18px;
         display: flex;
         flex-direction: column;
         align-items: flex-end;
         gap: 6px;
-        background: rgba(255,255,255,0.75);
-        border-bottom-left-radius: 12px;
-        z-index: 100;
-        min-width: 210px;
-        box-shadow: 0 2px 8px #ccc;
+        max-width: 95vw;
+        box-sizing: border-box;
     }
     #info-box button {
         margin: 0;
@@ -49,6 +55,10 @@
         #info-box {
             padding: 8px 5px 0 5px;
             min-width: 120px;
+            max-width: 98vw;
+        }
+        #container {
+            padding-top: 70px;
         }
         #info-box button {
             font-size: 0.93rem;
@@ -61,6 +71,8 @@
     #container {
         height: 100vh;
         width: 100vw;
+        max-width: 100vw;
+        max-height: 100vh;
         margin: 0;
         padding: 0;
         background: #fff;
@@ -70,6 +82,9 @@
         flex-direction: column;
         align-items: stretch;
         justify-content: stretch;
+        position: relative;
+        padding-top: 90px; /* spazio per info-box */
+        overflow: hidden;
     }
     h1 {
         text-align: center;
@@ -79,6 +94,7 @@
     #chart-container {
         flex: 1 1 auto;
         width: 100vw;
+        max-width: 100vw;
         height: 100%;
         min-height: 0;
         min-width: 0;
@@ -87,10 +103,13 @@
         justify-content: stretch;
         margin: 0;
         padding: 0;
+        overflow: hidden;
     }
     #speedChart {
         width: 100% !important;
         height: 100% !important;
+        max-width: 100vw;
+        max-height: 100vh;
         display: block;
     }
     button {
@@ -107,17 +126,17 @@
 </style>
 </head>
 <body>
-<div id="container">
-    <div id="info-box">
-        <button id="manualTest">Esegui Speedtest Manuale</button>
-        <p id="nextTest"></p>
-        <p id="lastUpdate"></p>
+    <div id="container">
+        <h1>Dashboard Velocità Internet</h1>
+        <div id="info-box">
+            <button id="manualTest">Esegui Speedtest Manuale</button>
+            <p id="nextTest"></p>
+            <p id="lastUpdate"></p>
+        </div>
+        <div id="chart-container">
+            <canvas id="speedChart"></canvas>
+        </div>
     </div>
-    <h1>Dashboard Velocità Internet</h1>
-    <div id="chart-container">
-        <canvas id="speedChart"></canvas>
-    </div>
-</div>
 <script>
 let chart;
 let firstLoad = true;
@@ -221,19 +240,8 @@ document.getElementById('manualTest').onclick = function() {
 };
 
 // Gestione contatore per prossimo test
-let nextTestSeconds = 60;
+let nextTestSeconds = 300;
 let lastAutoTestTime = null;
-
-function updateNextTestCounter() {
-    const now = new Date();
-    let remaining = 60;
-    if (lastAutoTestTime) {
-        const diff = Math.floor((now - lastAutoTestTime) / 1000);
-        remaining = 60 - diff;
-        if (remaining < 0) remaining = 0;
-    }
-    document.getElementById('nextTest').innerText = `Prossimo speed test automatico tra ${remaining}s`;
-}
 
 function fetchHistoryAndUpdateTimer() {
     fetch('/history')
@@ -263,9 +271,9 @@ function updateNextTestCounter() {
     let text = '--';
     if (lastAutoTestTime) {
         const diff = Math.floor((now - lastAutoTestTime) / 1000);
-        if (diff >= 0 && diff < 120) {
-            let remaining = 60 - (diff % 60);
-            if (remaining === 60) remaining = 0;
+        if (diff >= 0 && diff < 600) {
+            let remaining = 300 - (diff % 300);
+            if (remaining === 300) remaining = 0;
             text = `Prossimo speed test automatico tra ${remaining}s`;
         }
     }
@@ -320,7 +328,7 @@ window.addEventListener('DOMContentLoaded', () => {
     runInitialSpeedtest();
 });
 
-setInterval(fetchHistoryAndUpdateTimer, 60 * 1000);
+setInterval(fetchHistoryAndUpdateTimer, 300 * 1000);
 let autoTestRunning = false;
 
 function autoSpeedtestIfNeeded() {
@@ -329,9 +337,9 @@ function autoSpeedtestIfNeeded() {
     let remaining = null;
     if (lastAutoTestTime) {
         const diff = Math.floor((now - lastAutoTestTime) / 1000);
-        if (diff >= 0 && diff < 120) {
-            remaining = 60 - (diff % 60);
-            if (remaining === 60) remaining = 0;
+        if (diff >= 0 && diff < 600) {
+            remaining = 300 - (diff % 300);
+            if (remaining === 300) remaining = 0;
         }
     }
     if (remaining === 0) {
@@ -360,7 +368,6 @@ function autoSpeedtestIfNeeded() {
     }
 }
 
-setInterval(fetchHistoryAndUpdateTimer, 60 * 1000);
 setInterval(updateNextTestCounter, 1000);
 setInterval(autoSpeedtestIfNeeded, 1000);
 
