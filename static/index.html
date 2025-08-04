@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Velocità Internet</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+    html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: Arial, sans-serif;
+        background: #f7f7f7;
+    }
+    #info-box {
+        position: absolute;
+        top: 0;
+        right: 0;
+        padding: 16px 18px 0 18px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        background: rgba(255,255,255,0.75);
+        border-bottom-left-radius: 12px;
+        z-index: 100;
+        min-width: 210px;
+        box-shadow: 0 2px 8px #ccc;
+    }
+    #info-box button {
+        margin: 0;
+        margin-bottom: 3px;
+        padding: 10px 22px;
+        font-size: 1.05rem;
+        display: block;
+        align-self: flex-end;
+    }
+    #info-box p {
+        margin: 0;
+        text-align: right;
+        font-size: 1rem;
+        font-weight: normal;
+        color: #222;
+        background: none;
+    }
+    @media (max-width: 600px) {
+        #info-box {
+            padding: 8px 5px 0 5px;
+            min-width: 120px;
+        }
+        #info-box button {
+            font-size: 0.93rem;
+            padding: 7px 10px;
+        }
+        #info-box p {
+            font-size: 0.85rem;
+        }
+    }
+    #container {
+        height: 100vh;
+        width: 100vw;
+        margin: 0;
+        padding: 0;
+        background: #fff;
+        border-radius: 0;
+        box-shadow: none;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: stretch;
+    }
+    h1 {
+        text-align: center;
+        margin: 12px 0 0 0;
+        font-size: 2rem;
+    }
+    #chart-container {
+        flex: 1 1 auto;
+        width: 100vw;
+        height: 100%;
+        min-height: 0;
+        min-width: 0;
+        display: flex;
+        align-items: stretch;
+        justify-content: stretch;
+        margin: 0;
+        padding: 0;
+    }
+    #speedChart {
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+    }
+    button {
+        margin: 8px auto 0 auto;
+        padding: 12px 24px;
+        font-size: 1.1rem;
+        display: block;
+    }
+    #lastUpdate {
+        text-align: center;
+        margin-top: 8px;
+        margin-bottom: 0;
+    }
+</style>
+</head>
+<body>
+<div id="container">
+    <div id="info-box">
+        <button id="manualTest">Esegui Speedtest Manuale</button>
+        <p id="nextTest"></p>
+        <p id="lastUpdate"></p>
+    </div>
+    <h1>Dashboard Velocità Internet</h1>
+    <div id="chart-container">
+        <canvas id="speedChart"></canvas>
+    </div>
+</div>
+<script>
+let chart;
+let firstLoad = true;
+
+function fetchHistory() {
+    fetch('/history')
+        .then(res => res.json())
+        .then(data => {
+            updateChart(data);
+            if (data.length > 0) {
+                document.getElementById('lastUpdate').innerText = 'Ultimo aggiornamento: ' + data[data.length-1].time;
+            }
+        });
+}
+
+function updateChart(data) {
+    const labels = data.map(d => d.time);
+    const speeds = data.map(d => d.speed);
+    if (!chart) {
+        const ctx = document.getElementById('speedChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Velocità Download (Mbps)',
+                    data: speeds,
+                    fill: true,
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75,192,192,0.1)',
+                    tension: 0.2
+                }]
+            },
+            options: {
+                responsive: true,
+                layout: {
+                    padding: { left: 15, right: 15 }
+                },
+                plugins: {
+                    tooltip: { enabled: true },
+                    legend: { display: true },
+                    datalabels: {
+                        color: '#222',
+                        anchor: 'end',
+                        align: 'top',
+                        font: { weight: 'bold' },
+                        formatter: function(value) {
+                            return value + ' Mbps';
+                        }
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Ora' } },
+                    y: { title: { display: true, text: 'Mbps' }, beginAtZero: true }
+                },
+                animation: false,
+            },
+            plugins: [
+                // Plugin custom per mostrare i valori sopra i punti
+                {
+                    id: 'customDatalabels',
+                    afterDatasetsDraw(chart, args, opts) {
+                        const {ctx} = chart;
+                        chart.data.datasets.forEach((dataset, i) => {
+                            const meta = chart.getDatasetMeta(i);
+                            meta.data.forEach((point, index) => {
+                                const value = dataset.data[index];
+                                ctx.save();
+                                ctx.font = 'bold 12px Arial';
+                                ctx.fillStyle = '#222';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'bottom';
+                                ctx.fillText(value + ' Mbps', point.x, point.y - 8);
+                                ctx.restore();
+                            });
+                        });
+                    }
+                }
+            ]
+        });
+    } else {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = speeds;
+        chart.update();
+    }
+}
+
+
+document.getElementById('manualTest').onclick = function() {
+    this.disabled = true;
+    this.innerText = 'Test in corso...';
+    fetch('/speedtest', {method: 'POST'})
+        .then(res => res.json())
+        .then(result => {
+            fetchHistory();
+            setTimeout(() => {
+                document.getElementById('manualTest').disabled = false;
+                document.getElementById('manualTest').innerText = 'Esegui Speedtest Manuale';
+            }, 2000);
+        });
+};
+
+// Gestione contatore per prossimo test
+let nextTestSeconds = 60;
+let lastAutoTestTime = null;
+
+function updateNextTestCounter() {
+    const now = new Date();
+    let remaining = 60;
+    if (lastAutoTestTime) {
+        const diff = Math.floor((now - lastAutoTestTime) / 1000);
+        remaining = 60 - diff;
+        if (remaining < 0) remaining = 0;
+    }
+    document.getElementById('nextTest').innerText = `Prossimo speed test automatico tra ${remaining}s`;
+}
+
+function fetchHistoryAndUpdateTimer() {
+    fetch('/history')
+        .then(res => res.json())
+        .then(data => {
+            updateChart(data);
+            if (data.length > 0) {
+                document.getElementById('lastUpdate').innerText = 'Ultimo aggiornamento: ' + data[data.length-1].time;
+                // Calcola il tempo dell'ultimo test automatico
+                const now = new Date();
+                const last = data[data.length-1];
+                // Ricava ora e minuti
+                const [h, m] = last.time.split(':').map(Number);
+                let lastDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+                // Se l'orario è futuro rispetto ad adesso (ad es. cambio giorno), correggi di un giorno indietro
+                if (lastDate > now) lastDate.setDate(lastDate.getDate() - 1);
+                lastAutoTestTime = lastDate;
+            } else {
+                lastAutoTestTime = null;
+            }
+            updateNextTestCounter();
+        });
+}
+
+function updateNextTestCounter() {
+    const now = new Date();
+    let text = '--';
+    if (lastAutoTestTime) {
+        const diff = Math.floor((now - lastAutoTestTime) / 1000);
+        if (diff >= 0 && diff < 120) {
+            let remaining = 60 - (diff % 60);
+            if (remaining === 60) remaining = 0;
+            text = `Prossimo speed test automatico tra ${remaining}s`;
+        }
+    }
+    document.getElementById('nextTest').innerText = text;
+}
+
+function runInitialSpeedtest() {
+    const btn = document.getElementById('manualTest');
+    btn.disabled = true;
+    btn.innerText = 'Test in corso...';
+    fetch('/speedtest', {method: 'POST'})
+        .then(res => res.json())
+        .then(result => {
+            fetchHistoryAndUpdateTimer();
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerText = 'Esegui Speedtest Manuale';
+                if (result.error) showError('Speedtest fallito');
+            }, 2000);
+        })
+        .catch(() => {
+            fetchHistoryAndUpdateTimer();
+            btn.disabled = false;
+            btn.innerText = 'Esegui Speedtest Manuale';
+            showError('Errore di rete o speedtest fallito');
+        });
+}
+
+function showError(msg) {
+    let el = document.getElementById('testErrorMsg');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'testErrorMsg';
+        el.style.position = 'fixed';
+        el.style.top = '16px';
+        el.style.right = '24px';
+        el.style.background = '#f44336';
+        el.style.color = '#fff';
+        el.style.padding = '10px 18px';
+        el.style.borderRadius = '8px';
+        el.style.zIndex = 9999;
+        el.style.fontWeight = 'bold';
+        document.body.appendChild(el);
+    }
+    el.innerText = msg;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+
+window.addEventListener('DOMContentLoaded', () => {
+    runInitialSpeedtest();
+});
+
+setInterval(fetchHistoryAndUpdateTimer, 60 * 1000);
+let autoTestRunning = false;
+
+function autoSpeedtestIfNeeded() {
+    if (autoTestRunning) return;
+    const now = new Date();
+    let remaining = null;
+    if (lastAutoTestTime) {
+        const diff = Math.floor((now - lastAutoTestTime) / 1000);
+        if (diff >= 0 && diff < 120) {
+            remaining = 60 - (diff % 60);
+            if (remaining === 60) remaining = 0;
+        }
+    }
+    if (remaining === 0) {
+        autoTestRunning = true;
+        const btn = document.getElementById('manualTest');
+        btn.disabled = true;
+        btn.innerText = 'Test in corso...';
+        fetch('/speedtest', {method: 'POST'})
+            .then(res => res.json())
+            .then(result => {
+                fetchHistoryAndUpdateTimer();
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerText = 'Esegui Speedtest Manuale';
+                    autoTestRunning = false;
+                    if (result.error) showError('Speedtest fallito');
+                }, 2000);
+            })
+            .catch(() => {
+                fetchHistoryAndUpdateTimer();
+                btn.disabled = false;
+                btn.innerText = 'Esegui Speedtest Manuale';
+                autoTestRunning = false;
+                showError('Errore di rete o speedtest fallito');
+            });
+    }
+}
+
+setInterval(fetchHistoryAndUpdateTimer, 60 * 1000);
+setInterval(updateNextTestCounter, 1000);
+setInterval(autoSpeedtestIfNeeded, 1000);
+
+</script>
+</body>
+</html>
