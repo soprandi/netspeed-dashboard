@@ -240,8 +240,19 @@ document.getElementById('manualTest').onclick = function() {
 };
 
 // Gestione contatore per prossimo test
-let nextTestSeconds = 300;
+let nextTestSeconds = getRandomInterval(); // 300-600 secondi casuali
 let lastAutoTestTime = null;
+
+function getRandomInterval() {
+    // Genera un intervallo casuale tra 5 e 10 minuti (300-600 secondi)
+    return Math.floor(Math.random() * (600 - 300 + 1)) + 300;
+}
+
+function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+}
 
 function fetchHistoryAndUpdateTimer() {
     fetch('/history')
@@ -271,10 +282,10 @@ function updateNextTestCounter() {
     let text = '--';
     if (lastAutoTestTime) {
         const diff = Math.floor((now - lastAutoTestTime) / 1000);
-        if (diff >= 0 && diff < 600) {
-            let remaining = 300 - (diff % 300);
-            if (remaining === 300) remaining = 0;
-            text = `Prossimo speed test automatico tra ${remaining}s`;
+        if (diff >= 0 && diff < nextTestSeconds) {
+            let remaining = nextTestSeconds - diff;
+            if (remaining < 0) remaining = 0;
+            text = `Prossimo speed test automatico tra ${formatTime(remaining)}`;
         }
     }
     document.getElementById('nextTest').innerText = text;
@@ -334,15 +345,16 @@ let autoTestRunning = false;
 function autoSpeedtestIfNeeded() {
     if (autoTestRunning) return;
     const now = new Date();
-    let remaining = null;
+    let shouldRunTest = false;
+    
     if (lastAutoTestTime) {
         const diff = Math.floor((now - lastAutoTestTime) / 1000);
-        if (diff >= 0 && diff < 600) {
-            remaining = 300 - (diff % 300);
-            if (remaining === 300) remaining = 0;
+        if (diff >= nextTestSeconds) {
+            shouldRunTest = true;
         }
     }
-    if (remaining === 0) {
+    
+    if (shouldRunTest) {
         autoTestRunning = true;
         const btn = document.getElementById('manualTest');
         btn.disabled = true;
@@ -350,6 +362,9 @@ function autoSpeedtestIfNeeded() {
         fetch('/speedtest', {method: 'POST'})
             .then(res => res.json())
             .then(result => {
+                // Reset del timer con nuovo intervallo casuale
+                nextTestSeconds = getRandomInterval();
+                lastAutoTestTime = new Date();
                 fetchHistoryAndUpdateTimer();
                 setTimeout(() => {
                     btn.disabled = false;
@@ -359,6 +374,9 @@ function autoSpeedtestIfNeeded() {
                 }, 2000);
             })
             .catch(() => {
+                // Reset del timer anche in caso di errore
+                nextTestSeconds = getRandomInterval();
+                lastAutoTestTime = new Date();
                 fetchHistoryAndUpdateTimer();
                 btn.disabled = false;
                 btn.innerText = 'Esegui Speedtest Manuale';
